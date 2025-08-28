@@ -79,13 +79,14 @@ export default function Home() {
       if (error) throw error;
       
       if (data) {
-        setUserScores(data.scores);
-        return true;
+        const restoredScores = data.scores;
+        setUserScores(restoredScores);
+        return restoredScores; // 復元したデータを返す
       }
-      return false;
+      return null;
     } catch (error) {
       console.error('Error loading user score:', error);
-      return false;
+      return null;
     }
   };
 
@@ -169,6 +170,119 @@ export default function Home() {
 
   const getScore52Level = (average: number, stdDev: number) => {
     return average + stdDev * 0.2;
+  };
+
+  const calculateResultsWithData = async (inputScores: Record<string, string>) => {
+    const userScore: Record<string, number> = {};
+    const inputtedSubjects = new Set<string>();
+
+    // 復元されたデータを使用
+    Object.keys(questionConfig).forEach(key => {
+      const value = parseFloat(inputScores[key] || '');
+      if (!isNaN(value)) {
+        userScore[key] = value;
+        const config = questionConfig[key as keyof typeof questionConfig];
+        inputtedSubjects.add(config.subject);
+      }
+    });
+
+    // 少なくとも1つの科目が入力されているかチェック
+    if (Object.keys(userScore).length === 0) {
+      alert('復元されたデータに有効な成績がありません。');
+      return;
+    }
+
+    // 以下は元のcalculateResults()と同じロジック
+    const filterAbnormalScores = (scores: any[], key: string) => {
+      const config = questionConfig[key as keyof typeof questionConfig];
+      return scores.filter(s => {
+        const score = s[key];
+        if (score === undefined || score === null || score === '') return true;
+        const numScore = parseFloat(score);
+        return !(numScore === 0 || numScore === config.maxScore);
+      });
+    };
+
+    const filteredAllScores = filterDuplicateData(allScores, userScore);
+    const allData = [...filteredAllScores, userScore];
+    const calculatedResults: any = {};
+    const subjectResults: any = {};
+
+    Object.keys(userScore).forEach(key => {
+      const config = questionConfig[key as keyof typeof questionConfig];
+      const filteredData = filterAbnormalScores(allData, key);
+      const average = calculateAverage(filteredData, key);
+      const stdDev = calculateStandardDeviation(filteredData, key, average);
+      const userDeviation = calculateDeviation(userScore[key], average, stdDev);
+      const score52Level = getScore52Level(average, stdDev);
+
+      calculatedResults[key] = {
+        config,
+        userScore: userScore[key],
+        average,
+        deviation: userDeviation,
+        score52Level
+      };
+    });
+
+    // 科目ごとの偏差値を計算
+    if (userScore.zaimu3 !== undefined || userScore.zaimu4 !== undefined || userScore.zaimu5 !== undefined) {
+      const zaimuDeviations = [];
+      if (userScore.zaimu3 !== undefined) zaimuDeviations.push(calculatedResults.zaimu3.deviation * 0.6);
+      if (userScore.zaimu4 !== undefined) zaimuDeviations.push(calculatedResults.zaimu4.deviation * 0.7);
+      if (userScore.zaimu5 !== undefined) zaimuDeviations.push(calculatedResults.zaimu5.deviation * 0.7);
+      subjectResults.zaimu = zaimuDeviations.reduce((a, b) => a + b, 0) / 2;
+    }
+
+    if (userScore.kanri1 !== undefined || userScore.kanri2 !== undefined) {
+      const kanriDeviations = [];
+      if (userScore.kanri1 !== undefined) kanriDeviations.push(calculatedResults.kanri1.deviation);
+      if (userScore.kanri2 !== undefined) kanriDeviations.push(calculatedResults.kanri2.deviation);
+      subjectResults.kanri = kanriDeviations.reduce((a, b) => a + b, 0) / kanriDeviations.length;
+    }
+
+    if (userScore.sozei2 !== undefined) {
+      subjectResults.sozei = calculatedResults.sozei2.deviation;
+    }
+
+    if (userScore.keiei1 !== undefined || userScore.keiei2 !== undefined) {
+      const keieiDeviations = [];
+      if (userScore.keiei1 !== undefined) keieiDeviations.push(calculatedResults.keiei1.deviation);
+      if (userScore.keiei2 !== undefined) keieiDeviations.push(calculatedResults.keiei2.deviation);
+      subjectResults.keiei = keieiDeviations.reduce((a, b) => a + b, 0) / keieiDeviations.length;
+    }
+
+    // 総合偏差値を計算
+    let totalDeviation = 0;
+    let subjectCount = 0;
+    
+    if (subjectResults.zaimu !== undefined) {
+      totalDeviation += subjectResults.zaimu * 2;
+      subjectCount += 2;
+    }
+    if (subjectResults.kanri !== undefined) {
+      totalDeviation += subjectResults.kanri;
+      subjectCount += 1;
+    }
+    if (subjectResults.sozei !== undefined) {
+      totalDeviation += subjectResults.sozei;
+      subjectCount += 1;
+    }
+    if (subjectResults.keiei !== undefined) {
+      totalDeviation += subjectResults.keiei;
+      subjectCount += 1;
+    }
+
+    const overallDeviation = totalDeviation / subjectCount;
+
+    setResults({
+      questionResults: calculatedResults,
+      subjectResults,
+      overallDeviation,
+      inputtedSubjects: Array.from(inputtedSubjects)
+    });
+
+    setHasCalculated(true);
   };
 
   const calculateResults = async () => {
@@ -370,16 +484,15 @@ export default function Home() {
                     onChange={async (e) => {
                       const code = e.target.value.toUpperCase();
                       if (code.length === 8) {
-                        const success = await loadUserScore(code);
-                        if (success) {
+                        const restoredData = await loadUserScore(code);
+                        if (restoredData) {
                           setUserCode(code);
                           setShowCodeInput(false);
-                          setResults(null);
                           alert(`コード ${code} で成績表を復元しました`);
-                          // 復元後に自動で偏差値計算を実行（少し遅延を置く）
-                          setTimeout(async () => {
-                            await calculateResults();
-                          }, 500);
+                          // 復元したデータを使って直接計算を実行
+                          setTimeout(() => {
+                            calculateResultsWithData(restoredData);
+                          }, 300);
                         } else {
                           alert('該当するコードが見つかりませんでした');
                         }
