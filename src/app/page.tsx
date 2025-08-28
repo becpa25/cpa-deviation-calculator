@@ -374,8 +374,11 @@ export default function Home() {
                         if (success) {
                           setUserCode(code);
                           setShowCodeInput(false);
-                          setResults(null);
                           alert(`コード ${code} で成績表を復元しました`);
+                          // 復元後に自動で偏差値計算を実行
+                          setTimeout(() => {
+                            calculateResults();
+                          }, 100);
                         } else {
                           alert('該当するコードが見つかりませんでした');
                         }
@@ -561,7 +564,7 @@ export default function Home() {
           <div className="bg-white rounded-2xl shadow-2xl mb-5">
             <div className="p-6">
               <h2 className="text-2xl font-bold text-blue-600 border-b-2 border-blue-600 pb-3 mb-6">
-                あなたの分析結果
+                あなたの偏差値
               </h2>
 
               {/* 分析結果表示後のコード表示（結果のすぐ下に配置） */}
