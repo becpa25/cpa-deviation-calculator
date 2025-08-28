@@ -374,11 +374,12 @@ export default function Home() {
                         if (success) {
                           setUserCode(code);
                           setShowCodeInput(false);
+                          setResults(null);
                           alert(`コード ${code} で成績表を復元しました`);
-                          // 復元後に自動で偏差値計算を実行
-                          setTimeout(() => {
-                            calculateResults();
-                          }, 100);
+                          // 復元後に自動で偏差値計算を実行（少し遅延を置く）
+                          setTimeout(async () => {
+                            await calculateResults();
+                          }, 500);
                         } else {
                           alert('該当するコードが見つかりませんでした');
                         }
