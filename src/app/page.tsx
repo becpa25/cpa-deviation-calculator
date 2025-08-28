@@ -488,11 +488,9 @@ export default function Home() {
                         if (restoredData) {
                           setUserCode(code);
                           setShowCodeInput(false);
+                          // 復元したデータで即座に計算実行
+                          calculateResultsWithData(restoredData);
                           alert(`コード ${code} で成績表を復元しました`);
-                          // 復元したデータを使って直接計算を実行
-                          setTimeout(() => {
-                            calculateResultsWithData(restoredData);
-                          }, 300);
                         } else {
                           alert('該当するコードが見つかりませんでした');
                         }
