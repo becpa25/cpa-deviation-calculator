@@ -2,26 +2,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { supabase } from '../lib/supabase';
 
 export default function Home() {
-  // サンプルデータ（実際のサービスではサーバーから取得）
-  const allScores = [
-    {zaimu3: 12, zaimu4: 5, zaimu5: 14, kanri1: 28, kanri2: 11, sozei2: 18, keiei1: 12, keiei2: 19},
-    {zaimu3: 15, zaimu4: 6, zaimu5: 11, kanri1: 35, kanri2: 13, sozei2: 22, keiei1: 14, keiei2: 17},
-    {zaimu3: 9, zaimu4: 4, zaimu5: 16, kanri1: 31, kanri2: 9, sozei2: 25, keiei1: 11, keiei2: 21},
-    {zaimu3: 16, zaimu4: 7, zaimu5: 13, kanri1: 39, kanri2: 14, sozei2: 19, keiei1: 15, keiei2: 23},
-    {zaimu3: 8, zaimu4: 3, zaimu5: 9, kanri1: 22, kanri2: 7, sozei2: 14, keiei1: 8, keiei2: 12},
-    {zaimu3: 14, zaimu4: 6, zaimu5: 15, kanri1: 33, kanri2: 12, sozei2: 20, keiei1: 13, keiei2: 18},
-    {zaimu3: 11, zaimu4: 4, zaimu5: 12, kanri1: 26, kanri2: 10, sozei2: 16, keiei1: 9, keiei2: 15},
-    {zaimu3: 17, zaimu4: 8, zaimu5: 17, kanri1: 41, kanri2: 15, sozei2: 27, keiei1: 16, keiei2: 24},
-    {zaimu3: 13, zaimu4: 5, zaimu5: 10, kanri1: 29, kanri2: 8, sozei2: 21, keiei1: 10, keiei2: 16},
-    {zaimu3: 10, zaimu4: 7, zaimu5: 18, kanri1: 37, kanri2: 13, sozei2: 23, keiei1: 14, keiei2: 20},
-    {zaimu3: 18, zaimu4: 8, zaimu5: 16, kanri1: 42, kanri2: 16, sozei2: 28, keiei1: 17, keiei2: 25},
-    {zaimu3: 7, zaimu4: 2, zaimu5: 8, kanri1: 19, kanri2: 6, sozei2: 12, keiei1: 6, keiei2: 10},
-    {zaimu3: 14, zaimu4: 6, zaimu5: 13, kanri1: 32, kanri2: 11, sozei2: 19, keiei1: 12, keiei2: 18},
-    {zaimu3: 12, zaimu4: 5, zaimu5: 11, kanri1: 27, kanri2: 9, sozei2: 17, keiei1: 11, keiei2: 14},
-    {zaimu3: 16, zaimu4: 7, zaimu5: 15, kanri1: 38, kanri2: 14, sozei2: 24, keiei1: 15, keiei2: 22}
-  ];
+  // サンプルデータを削除
+  const [allScores, setAllScores] = useState<any[]>([]);
 
   // 問題設定
   const questionConfig = {
@@ -41,6 +26,68 @@ export default function Home() {
   const [userCode, setUserCode] = useState<string>('');
   const [showCodeInput, setShowCodeInput] = useState<boolean>(false);
   const [hasCalculated, setHasCalculated] = useState<boolean>(false);
+
+  // データベースからすべてのスコアを読み込む
+  useEffect(() => {
+    loadAllScores();
+  }, []);
+
+  const loadAllScores = async () => {
+    try {
+      const { data, error } = await supabase
+        .from('user_scores')
+        .select('scores');
+      
+      if (error) throw error;
+      
+      const scores = data.map(item => item.scores);
+      setAllScores(scores);
+    } catch (error) {
+      console.error('Error loading scores:', error);
+    }
+  };
+
+  // データベースにスコアを保存
+  const saveScoreToDatabase = async (code: string, scoreData: any) => {
+    try {
+      const { error } = await supabase
+        .from('user_scores')
+        .upsert({
+          user_code: code,
+          scores: scoreData,
+          updated_at: new Date().toISOString()
+        });
+      
+      if (error) throw error;
+      
+      // 保存後、全データを再読み込み
+      await loadAllScores();
+    } catch (error) {
+      console.error('Error saving score:', error);
+    }
+  };
+
+  // コードでデータを復元
+  const loadUserScore = async (code: string) => {
+    try {
+      const { data, error } = await supabase
+        .from('user_scores')
+        .select('scores')
+        .eq('user_code', code)
+        .single();
+      
+      if (error) throw error;
+      
+      if (data) {
+        setUserScores(data.scores);
+        return true;
+      }
+      return false;
+    } catch (error) {
+      console.error('Error loading user score:', error);
+      return false;
+    }
+  };
 
   // 8桁コード生成
   const generateUserCode = () => {
@@ -81,19 +128,6 @@ export default function Home() {
       const similarity = calculateSimilarity(score, newUserData);
       return similarity < 0.8; // 80%以上類似は除外
     });
-  };
-
-  // データ保存（実際のサービスではサーバーに送信）
-  const saveToCloud = (code: string, data: any) => {
-    // 実装時はここでSupabaseなどに保存
-    console.log('Saving to cloud:', { code, data });
-  };
-
-  // データ読み込み（実際のサービスではサーバーから取得）
-  const loadFromCloud = async (code: string) => {
-    // 実装時はここでSupabaseなどから取得
-    console.log('Loading from cloud:', code);
-    return null;
   };
 
   const validateInput = (key: string, value: string) => {
@@ -137,7 +171,7 @@ export default function Home() {
     return average + stdDev * 0.2;
   };
 
-  const calculateResults = () => {
+  const calculateResults = async () => {
     const userScore: Record<string, number> = {};
     const inputtedSubjects = new Set<string>();
 
@@ -254,6 +288,11 @@ export default function Home() {
     if (!userCode) {
       const newCode = generateUserCode();
       setUserCode(newCode);
+      // データベースに保存
+      await saveScoreToDatabase(newCode, userScore);
+    } else {
+      // 既存コードでデータ更新
+      await saveScoreToDatabase(userCode, userScore);
     }
 
     // 計算済みフラグを設定
@@ -328,15 +367,18 @@ export default function Home() {
                     placeholder="8桁コードを入力"
                     maxLength={8}
                     className="p-2 border-2 border-gray-300 rounded-lg uppercase text-center"
-                    onChange={(e) => {
+                    onChange={async (e) => {
                       const code = e.target.value.toUpperCase();
                       if (code.length === 8) {
-                        setUserCode(code);
-                        setShowCodeInput(false);
-                        // 実際のサービスではここでデータをロード
-                        // 復元後は編集可能状態にする
-                        setResults(null);
-                        alert(`コード ${code} で成績表を復元しました（デモ版では機能しません）`);
+                        const success = await loadUserScore(code);
+                        if (success) {
+                          setUserCode(code);
+                          setShowCodeInput(false);
+                          setResults(null);
+                          alert(`コード ${code} で成績表を復元しました`);
+                        } else {
+                          alert('該当するコードが見つかりませんでした');
+                        }
                       }
                     }}
                   />
