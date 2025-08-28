@@ -274,7 +274,7 @@ export default function Home() {
       const average = calculateAverage(allScores, key);
       const stdDev = calculateStandardDeviation(allScores, key, average);
       const score52Level = getScore52Level(average, stdDev);
-      const dataCount = allScores.filter(s => s[key] !== undefined).length;
+      const dataCount = allScores.filter(s => s[key as keyof typeof s] !== undefined).length;
 
       return {
         key,
