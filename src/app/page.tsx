@@ -419,7 +419,7 @@ export default function Home() {
               {/* 管理会計論 */}
               <div className="mb-8 p-4 bg-gray-50 rounded-xl">
                 <div className="text-xl font-bold mb-1 text-gray-800">管理会計論</div>
-                <div className="text-xs text-gray-600 mb-4">※管理会計論は池邉先生が予想している配点に基づく</div>
+                <div className="text-xs text-gray-600 mb-4">※管理会計論は池邉講師が予想している配点に基づく</div>
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {['kanri1', 'kanri2'].map((key) => {
                     const config = questionConfig[key as keyof typeof questionConfig];
