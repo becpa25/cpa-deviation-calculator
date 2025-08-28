@@ -473,7 +473,7 @@ export default function Home() {
         {/* ヘッダーカード */}
         <div className="bg-white rounded-2xl shadow-2xl mb-5 overflow-hidden">
           <div className="bg-gradient-to-r from-blue-500 to-cyan-400 text-white p-5 text-center">
-            <h1 className="text-3xl font-bold mb-2">
+            <h1 className="text-2xl sm:text-3xl font-bold mb-2">
               令和７年度会計士論文式試験<br />
               偏差値カリキュレーター
             </h1>
@@ -624,7 +624,7 @@ export default function Home() {
                           placeholder="点数を入力"
                           className="p-3 border-2 border-gray-300 rounded-lg text-base focus:outline-none focus:border-blue-500 transition-colors"
                         />
-                        <div className="text-xs text-gray-600 mt-1">
+                        <div className="text-xs text-red-600 font-semibold mt-1">
                           {config.maxScore}点満点
                         </div>
                       </div>
@@ -683,16 +683,16 @@ export default function Home() {
               </div>
 
               {/* ボタン */}
-              <div className="text-center">
+              <div className="text-center space-y-3 sm:space-y-0">
                 <button
                   onClick={calculateResults}
-                  className="mx-2 px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full font-semibold text-lg hover:transform hover:-translate-y-1 hover:shadow-lg transition-all"
+                  className="w-full sm:w-auto mx-2 px-8 py-4 bg-gradient-to-r from-blue-600 to-purple-600 text-white rounded-full font-semibold text-lg hover:transform hover:-translate-y-1 hover:shadow-lg transition-all"
                 >
                   {hasCalculated ? '修正した入力内容を反映' : '分析結果を表示'}
                 </button>
                 <button
                   onClick={clearData}
-                  className="mx-2 px-8 py-4 bg-gradient-to-r from-yellow-500 to-orange-500 text-white rounded-full font-semibold text-lg hover:transform hover:-translate-y-1 hover:shadow-lg transition-all"
+                  className="w-full sm:w-auto mx-2 px-8 py-4 bg-gradient-to-r from-yellow-500 to-orange-500 text-white rounded-full font-semibold text-lg hover:transform hover:-translate-y-1 hover:shadow-lg transition-all"
                 >
                   データをクリア
                 </button>
@@ -718,7 +718,23 @@ export default function Home() {
                   <div className="text-sm text-gray-700 mb-3">
                     以下のコードをメモ・スクショして保存してください
                   </div>
-                  <div className="text-2xl font-bold text-blue-600 bg-white p-3 rounded-lg inline-block border-2 border-gray-200">
+                  <div 
+                    className="text-2xl font-bold text-blue-600 bg-white p-3 rounded-lg inline-block border-2 border-gray-200 cursor-pointer hover:bg-gray-50 transition-colors select-all"
+                    onClick={() => {
+                      navigator.clipboard.writeText(userCode).then(() => {
+                        alert('コードをコピーしました！');
+                      }).catch(() => {
+                        // フォールバック: 選択状態にする
+                        const range = document.createRange();
+                        const selection = window.getSelection();
+                        range.selectNodeContents(document.querySelector('#user-code'));
+                        selection?.removeAllRanges();
+                        selection?.addRange(range);
+                      });
+                    }}
+                    id="user-code"
+                    title="タップでコピー"
+                  >
                     {userCode}
                   </div>
                   <div className="text-xs text-gray-600 mt-3">
