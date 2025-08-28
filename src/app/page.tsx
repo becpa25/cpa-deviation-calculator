@@ -725,11 +725,14 @@ export default function Home() {
                         alert('コードをコピーしました！');
                       }).catch(() => {
                         // フォールバック: 選択状態にする
-                        const range = document.createRange();
-                        const selection = window.getSelection();
-                        range.selectNodeContents(document.querySelector('#user-code'));
-                        selection?.removeAllRanges();
-                        selection?.addRange(range);
+                        const element = document.querySelector('#user-code');
+                        if (element) {
+                          const range = document.createRange();
+                          const selection = window.getSelection();
+                          range.selectNodeContents(element);
+                          selection?.removeAllRanges();
+                          selection?.addRange(range);
+                        }
                       });
                     }}
                     id="user-code"
