@@ -836,33 +836,30 @@ export default function Home() {
               全体統計
             </h2>
             <div className="overflow-x-auto">
-              <table className="w-full border-collapse">
+              <table className="w-full border-collapse min-w-max">
                 <thead>
                   <tr className="bg-blue-500 text-white">
-                    <th className="p-3 text-center font-bold border-b border-gray-300">科目・問題</th>
-                    <th className="p-3 text-center font-bold border-b border-gray-300">平均</th>
-                    <th className="p-3 text-center font-bold border-b border-gray-300">偏差値52レベル</th>
-                    <th className="p-3 text-center font-bold border-b border-gray-300">データ数</th>
+                    <th className="p-2 sm:p-3 text-center font-bold border-b border-gray-300 text-xs sm:text-base min-w-32">科目・問題</th>
+                    <th className="p-2 sm:p-3 text-center font-bold border-b border-gray-300 text-xs sm:text-base">平均</th>
+                    <th className="p-2 sm:p-3 text-center font-bold border-b border-gray-300 text-xs sm:text-base">偏差値52レベル</th>
+                    <th className="p-2 sm:p-3 text-center font-bold border-b border-gray-300 text-xs sm:text-base">データ数</th>
                   </tr>
                 </thead>
                 <tbody>
                   {generateStats().map((stat, index) => (
                     <tr key={stat.key} className={index % 2 === 0 ? 'bg-gray-50' : 'bg-white'}>
-                      <td className="p-3 text-center border-b border-gray-200">{stat.config.name}</td>
-                      <td className="p-3 text-center border-b border-gray-200">
+                      <td className="p-2 sm:p-3 text-center border-b border-gray-200 text-xs sm:text-base whitespace-nowrap font-medium">{stat.config.name}</td>
+                      <td className="p-2 sm:p-3 text-center border-b border-gray-200 text-xs sm:text-base">
                         {stat.average.toFixed(1)}{stat.config.unit}
                       </td>
-                      <td className="p-3 text-center border-b border-gray-200">
+                      <td className="p-2 sm:p-3 text-center border-b border-gray-200 text-xs sm:text-base">
                         {stat.score52Level.toFixed(1)}{stat.config.unit}
                       </td>
-                      <td className="p-3 text-center border-b border-gray-200">{stat.dataCount}人</td>
+                      <td className="p-2 sm:p-3 text-center border-b border-gray-200 text-xs sm:text-base">{stat.dataCount}人</td>
                     </tr>
                   ))}
                 </tbody>
               </table>
-            </div>
-            <div className="mt-4 p-3 bg-yellow-100 border-l-4 border-yellow-500 text-yellow-800 rounded">
-              ※ このデモでは固定のサンプルデータを使用しています
             </div>
           </div>
         </div>
