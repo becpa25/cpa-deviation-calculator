@@ -161,18 +161,33 @@ export default function Home() {
   };
 
   const calculateAverage = (scores: any[], question: string) => {
-    const validScores = scores.filter(s => s[question] !== undefined && s[question] !== null && s[question] !== '');
-    return validScores.length > 0 ? validScores.reduce((sum, s) => sum + parseFloat(s[question]), 0) / validScores.length : 0;
+    const validScores = scores.filter(s => {
+      const value = s[question];
+      return value !== undefined && value !== null && value !== '' && !isNaN(parseFloat(value));
+    });
+    if (validScores.length === 0) return 0;
+    const sum = validScores.reduce((sum, s) => sum + parseFloat(s[question]), 0);
+    return sum / validScores.length;
   };
 
   const calculateStandardDeviation = (scores: any[], question: string, average: number) => {
-    const validScores = scores.filter(s => s[question] !== undefined && s[question] !== null && s[question] !== '');
+    const validScores = scores.filter(s => {
+      const value = s[question];
+      return value !== undefined && value !== null && value !== '' && !isNaN(parseFloat(value));
+    });
     if (validScores.length <= 1) return 1;
-    const variance = validScores.reduce((sum, s) => sum + Math.pow(parseFloat(s[question]) - average, 2), 0) / validScores.length;
-    return Math.sqrt(variance);
+    const variance = validScores.reduce((sum, s) => {
+      const diff = parseFloat(s[question]) - average;
+      return sum + (diff * diff);
+    }, 0) / validScores.length;
+    const stdDev = Math.sqrt(variance);
+    return stdDev === 0 ? 1 : stdDev; // 0除算防止
   };
 
   const calculateDeviation = (score: number, average: number, stdDev: number) => {
+    if (isNaN(score) || isNaN(average) || isNaN(stdDev) || stdDev === 0) {
+      return 50; // デフォルト値
+    }
     return 50 + (score - average) / stdDev * 10;
   };
 
@@ -264,24 +279,24 @@ export default function Home() {
     let totalDeviation = 0;
     let subjectCount = 0;
     
-    if (subjectResults.zaimu !== undefined) {
+    if (subjectResults.zaimu !== undefined && !isNaN(subjectResults.zaimu)) {
       totalDeviation += subjectResults.zaimu * 2;
       subjectCount += 2;
     }
-    if (subjectResults.kanri !== undefined) {
+    if (subjectResults.kanri !== undefined && !isNaN(subjectResults.kanri)) {
       totalDeviation += subjectResults.kanri;
       subjectCount += 1;
     }
-    if (subjectResults.sozei !== undefined) {
+    if (subjectResults.sozei !== undefined && !isNaN(subjectResults.sozei)) {
       totalDeviation += subjectResults.sozei;
       subjectCount += 1;
     }
-    if (subjectResults.keiei !== undefined) {
+    if (subjectResults.keiei !== undefined && !isNaN(subjectResults.keiei)) {
       totalDeviation += subjectResults.keiei;
       subjectCount += 1;
     }
 
-    const overallDeviation = totalDeviation / subjectCount;
+    const overallDeviation = subjectCount > 0 ? totalDeviation / subjectCount : 50;
 
     setResults({
       questionResults: calculatedResults,
