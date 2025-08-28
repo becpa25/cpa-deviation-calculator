@@ -27,6 +27,14 @@ export default function Home() {
   const [showCodeInput, setShowCodeInput] = useState<boolean>(false);
   const [hasCalculated, setHasCalculated] = useState<boolean>(false);
 
+  // localStorageからuserCodeを復元
+  useEffect(() => {
+    const savedCode = localStorage.getItem('cpa-calculator-user-code');
+    if (savedCode) {
+      setUserCode(savedCode);
+    }
+  }, []);
+
   // データベースからすべてのスコアを読み込む
   useEffect(() => {
     loadAllScores();
@@ -402,10 +410,12 @@ export default function Home() {
     if (!userCode) {
       const newCode = generateUserCode();
       setUserCode(newCode);
+      // localStorageに保存
+      localStorage.setItem('cpa-calculator-user-code', newCode);
       // データベースに保存
       await saveScoreToDatabase(newCode, userScore);
     } else {
-      // 既存コードでデータ更新
+      // 既存コードでデータ更新（同じuser_codeで上書き）
       await saveScoreToDatabase(userCode, userScore);
     }
 
@@ -418,6 +428,9 @@ export default function Home() {
       setUserScores({});
       setResults(null);
       setHasCalculated(false);
+      setUserCode(''); // コードもクリア
+      // localStorageからも削除
+      localStorage.removeItem('cpa-calculator-user-code');
     }
   };
 
@@ -487,6 +500,8 @@ export default function Home() {
                         const restoredData = await loadUserScore(code);
                         if (restoredData) {
                           setUserCode(code);
+                          // localStorageにも保存
+                          localStorage.setItem('cpa-calculator-user-code', code);
                           setShowCodeInput(false);
                           // 復元したデータで即座に計算実行
                           calculateResultsWithData(restoredData);
