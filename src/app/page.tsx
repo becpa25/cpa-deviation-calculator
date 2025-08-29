@@ -30,7 +30,7 @@ export default function Home() {
 
   // 複数データセット定義（各倍率に対応）
   const getExpectedDataset = (multiplier: number) => {
-    // 現在の実データ平均（例：財務会計論第3問=7.0, 管理会計論第1問=18.0）
+    // 現在の実データ平均（すべての大問に対応）
     const baseAverages = {
       'zaimu3': 7.0,
       'zaimu4': 0.0, 
@@ -48,32 +48,32 @@ export default function Home() {
         stdDev: multiplier === 1 ? 3.5 : 3.0 + (multiplier - 1) * 0.3
       },
       'zaimu4': { 
-        average: baseAverages.zaimu4, 
-        stdDev: 1.0 
+        average: multiplier === 1 ? baseAverages.zaimu4 : Math.max(0.5, baseAverages.zaimu4 + 1.0 / multiplier),
+        stdDev: 2.0 + (multiplier - 1) * 0.2
       },
       'zaimu5': { 
-        average: baseAverages.zaimu5, 
-        stdDev: 1.0 
+        average: multiplier === 1 ? baseAverages.zaimu5 : Math.max(0.5, baseAverages.zaimu5 + 1.5 / multiplier),
+        stdDev: 2.5 + (multiplier - 1) * 0.3
       },
       'kanri1': { 
         average: multiplier === 1 ? baseAverages.kanri1 : baseAverages.kanri1 / multiplier, 
         stdDev: multiplier === 1 ? 10.0 : 8.0 + (multiplier - 1) * 0.5
       },
       'kanri2': { 
-        average: baseAverages.kanri2, 
-        stdDev: 1.0 
+        average: multiplier === 1 ? baseAverages.kanri2 : Math.max(0.5, baseAverages.kanri2 + 2.0 / multiplier),
+        stdDev: 3.0 + (multiplier - 1) * 0.4
       },
       'sozei2': { 
-        average: baseAverages.sozei2, 
-        stdDev: 1.0 
+        average: multiplier === 1 ? baseAverages.sozei2 : Math.max(0.5, baseAverages.sozei2 + 3.0 / multiplier),
+        stdDev: 4.0 + (multiplier - 1) * 0.5
       },
       'keiei1': { 
-        average: baseAverages.keiei1, 
-        stdDev: 1.0 
+        average: multiplier === 1 ? baseAverages.keiei1 : Math.max(0.5, baseAverages.keiei1 + 1.0 / multiplier),
+        stdDev: 2.5 + (multiplier - 1) * 0.3
       },
       'keiei2': { 
-        average: baseAverages.keiei2, 
-        stdDev: 1.0 
+        average: multiplier === 1 ? baseAverages.keiei2 : Math.max(0.5, baseAverages.keiei2 + 2.0 / multiplier),
+        stdDev: 3.5 + (multiplier - 1) * 0.4
       }
     };
   };
@@ -417,19 +417,6 @@ export default function Home() {
     setHasCalculated(true);
   };
 
-  // データモード切り替えでの再計算
-const handleDataModeChange = async (mode: string) => {
-  setDataMode(mode);
-  if (results && Object.keys(userScores).length > 0) {
-    if (mode === 'actual') {
-      await calculateResults();
-    } else {
-      const multiplier = parseFloat(mode.replace('x', ''));
-      await calculateResultsWithExpectedData(userScores, multiplier);
-    }
-  }
-};
-
   const calculateResultsWithData = async (inputScores: Record<string, string>) => {
     const userScore: Record<string, number> = {};
     const inputtedSubjects = new Set<string>();
@@ -541,6 +528,19 @@ const handleDataModeChange = async (mode: string) => {
     });
 
     setHasCalculated(true);
+  };
+
+  // データモード切り替えでの再計算
+  const handleDataModeChange = async (mode: string) => {
+    setDataMode(mode);
+    if (results && Object.keys(userScores).length > 0) {
+      if (mode === 'actual') {
+        await calculateResults();
+      } else {
+        const multiplier = parseFloat(mode.replace('x', ''));
+        await calculateResultsWithExpectedData(userScores, multiplier);
+      }
+    }
   };
 
   const calculateResults = async () => {
@@ -1013,7 +1013,7 @@ const handleDataModeChange = async (mode: string) => {
               <div className="mb-6 p-3 rounded-lg text-sm text-center">
                 {dataMode === 'actual' && (
                   <div className="bg-blue-50 text-blue-800 border border-blue-200">
-                    現在入力されている約200名の実データに基づく偏差値です
+                    現在入力されている実データに基づく偏差値です
                   </div>
                 )}
                 {dataMode === '1.2x' && (
