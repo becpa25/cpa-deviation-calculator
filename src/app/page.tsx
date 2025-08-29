@@ -29,9 +29,27 @@ export default function Home() {
 
   // localStorageからuserCodeを復元
   useEffect(() => {
+    // まずlocalStorageの内容をデバッグ出力
+    console.log('All localStorage keys:', Object.keys(localStorage));
     const savedCode = localStorage.getItem('cpa-calculator-user-code');
-    if (savedCode) {
+    console.log('Raw savedCode from localStorage:', savedCode);
+    console.log('savedCode type:', typeof savedCode);
+    
+    // 無効な値が入っている場合は強制クリア
+    if (savedCode && (savedCode.includes('令和') || savedCode.includes('会計士') || savedCode.length !== 8)) {
+      console.log('Invalid code detected, clearing localStorage');
+      localStorage.removeItem('cpa-calculator-user-code');
+      return;
+    }
+    
+    // 8桁の英数字のみ有効とする
+    if (savedCode && /^[A-Z0-9]{8}$/.test(savedCode)) {
       setUserCode(savedCode);
+      console.log('Valid user code restored:', savedCode);
+    } else {
+      console.log('Invalid or missing user code, will generate new one');
+      // 無効なコードはlocalStorageから削除
+      localStorage.removeItem('cpa-calculator-user-code');
     }
   }, []);
 
@@ -58,6 +76,7 @@ export default function Home() {
   // データベースにスコアを保存
   const saveScoreToDatabase = async (code: string, scoreData: any) => {
     try {
+      console.log('Saving to database:', { code, scoreData }); // デバッグログ追加
       const { error } = await supabase
         .from('user_scores')
         .upsert({
@@ -66,12 +85,17 @@ export default function Home() {
           updated_at: new Date().toISOString()
         });
       
-      if (error) throw error;
+      if (error) {
+        console.error('Supabase error:', error);
+        throw error;
+      }
       
+      console.log('Successfully saved to database'); // 成功ログ追加
       // 保存後、全データを再読み込み
       await loadAllScores();
     } catch (error) {
       console.error('Error saving score:', error);
+      alert('データの保存に失敗しました。再度お試しください。');
     }
   };
 
@@ -105,6 +129,7 @@ export default function Home() {
     for (let i = 0; i < 8; i++) {
       result += chars.charAt(Math.floor(Math.random() * chars.length));
     }
+    console.log('Generated user code:', result); // デバッグログ
     return result;
   };
 
@@ -424,6 +449,7 @@ export default function Home() {
     // 分析結果表示後にコードを生成（初回のみ）
     if (!userCode) {
       const newCode = generateUserCode();
+      console.log('Generated new user code:', newCode); // デバッグログ
       setUserCode(newCode);
       // localStorageに保存
       localStorage.setItem('cpa-calculator-user-code', newCode);
@@ -431,6 +457,7 @@ export default function Home() {
       await saveScoreToDatabase(newCode, userScore);
     } else {
       // 既存コードでデータ更新（同じuser_codeで上書き）
+      console.log('Updating existing user code:', userCode); // デバッグログ
       await saveScoreToDatabase(userCode, userScore);
     }
 
@@ -446,6 +473,13 @@ export default function Home() {
       setUserCode(''); // コードもクリア
       // localStorageからも削除
       localStorage.removeItem('cpa-calculator-user-code');
+      // 念のため、関連するすべてのlocalStorageをクリア
+      Object.keys(localStorage).forEach(key => {
+        if (key.includes('cpa-calculator') || key.includes('会計士') || key.includes('令和')) {
+          localStorage.removeItem(key);
+        }
+      });
+      console.log('All data and localStorage cleared');
     }
   };
 
