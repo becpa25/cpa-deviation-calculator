@@ -23,60 +23,9 @@ export default function Home() {
   const [userScores, setUserScores] = useState<Record<string, string>>({});
   const [results, setResults] = useState<any>(null);
   const [currentMode, setCurrentMode] = useState<'input' | 'stats'>('input');
-  const [dataMode, setDataMode] = useState<string>('actual'); // 実データ基準をデフォルトに
   const [userCode, setUserCode] = useState<string>('');
   const [showCodeInput, setShowCodeInput] = useState<boolean>(false);
   const [hasCalculated, setHasCalculated] = useState<boolean>(false);
-
-  // 複数データセット定義（各倍率に対応）
-  const getExpectedDataset = (multiplier: number) => {
-    // 現在の実データ平均（すべての大問に対応）
-    const baseAverages = {
-      'zaimu3': 7.0,
-      'zaimu4': 0.0, 
-      'zaimu5': 0.0,
-      'kanri1': 18.0,
-      'kanri2': 0.0,
-      'sozei2': 0.0,
-      'keiei1': 0.0,
-      'keiei2': 0.0
-    };
-    
-    return {
-      'zaimu3': { 
-        average: multiplier === 1 ? baseAverages.zaimu3 : baseAverages.zaimu3 / multiplier, 
-        stdDev: multiplier === 1 ? 3.5 : 3.0 + (multiplier - 1) * 0.3
-      },
-      'zaimu4': { 
-        average: multiplier === 1 ? baseAverages.zaimu4 : Math.max(0.5, baseAverages.zaimu4 + 1.0 / multiplier),
-        stdDev: 2.0 + (multiplier - 1) * 0.2
-      },
-      'zaimu5': { 
-        average: multiplier === 1 ? baseAverages.zaimu5 : Math.max(0.5, baseAverages.zaimu5 + 1.5 / multiplier),
-        stdDev: 2.5 + (multiplier - 1) * 0.3
-      },
-      'kanri1': { 
-        average: multiplier === 1 ? baseAverages.kanri1 : baseAverages.kanri1 / multiplier, 
-        stdDev: multiplier === 1 ? 10.0 : 8.0 + (multiplier - 1) * 0.5
-      },
-      'kanri2': { 
-        average: multiplier === 1 ? baseAverages.kanri2 : Math.max(0.5, baseAverages.kanri2 + 2.0 / multiplier),
-        stdDev: 3.0 + (multiplier - 1) * 0.4
-      },
-      'sozei2': { 
-        average: multiplier === 1 ? baseAverages.sozei2 : Math.max(0.5, baseAverages.sozei2 + 3.0 / multiplier),
-        stdDev: 4.0 + (multiplier - 1) * 0.5
-      },
-      'keiei1': { 
-        average: multiplier === 1 ? baseAverages.keiei1 : Math.max(0.5, baseAverages.keiei1 + 1.0 / multiplier),
-        stdDev: 2.5 + (multiplier - 1) * 0.3
-      },
-      'keiei2': { 
-        average: multiplier === 1 ? baseAverages.keiei2 : Math.max(0.5, baseAverages.keiei2 + 2.0 / multiplier),
-        stdDev: 3.5 + (multiplier - 1) * 0.4
-      }
-    };
-  };
 
   // localStorageからuserCodeを復元
   useEffect(() => {
@@ -318,105 +267,6 @@ export default function Home() {
     return average + stdDev * 0.2;
   };
 
-  const calculateResultsWithExpectedData = async (inputScores: Record<string, string>, multiplier: number = 1.5) => {
-    const userScore: Record<string, number> = {};
-    const inputtedSubjects = new Set<string>();
-
-    // 入力データを取得
-    Object.keys(questionConfig).forEach(key => {
-      const value = parseFloat(inputScores[key] || '');
-      if (!isNaN(value)) {
-        userScore[key] = value;
-        const config = questionConfig[key as keyof typeof questionConfig];
-        inputtedSubjects.add(config.subject);
-      }
-    });
-
-    if (Object.keys(userScore).length === 0) {
-      alert('少なくとも1つの科目の点数を入力してください。');
-      return;
-    }
-
-    const calculatedResults: any = {};
-    const subjectResults: any = {};
-    const expectedDataset = getExpectedDataset(multiplier);
-
-    // 各大問の偏差値を想定データで計算
-    Object.keys(userScore).forEach(key => {
-      const config = questionConfig[key as keyof typeof questionConfig];
-      const expectedData = expectedDataset[key as keyof typeof expectedDataset];
-      const userDeviation = calculateDeviation(userScore[key], expectedData.average, expectedData.stdDev);
-      const score52Level = getScore52Level(expectedData.average, expectedData.stdDev);
-
-      calculatedResults[key] = {
-        config,
-        userScore: userScore[key],
-        average: expectedData.average,
-        deviation: userDeviation,
-        score52Level
-      };
-    });
-
-    // 科目ごとの偏差値を計算（実データと同じロジック）
-    if (userScore.zaimu3 !== undefined || userScore.zaimu4 !== undefined || userScore.zaimu5 !== undefined) {
-      const zaimuDeviations = [];
-      if (userScore.zaimu3 !== undefined) zaimuDeviations.push(calculatedResults.zaimu3.deviation * 0.6);
-      if (userScore.zaimu4 !== undefined) zaimuDeviations.push(calculatedResults.zaimu4.deviation * 0.7);
-      if (userScore.zaimu5 !== undefined) zaimuDeviations.push(calculatedResults.zaimu5.deviation * 0.7);
-      subjectResults.zaimu = zaimuDeviations.reduce((a, b) => a + b, 0) / 2;
-    }
-
-    if (userScore.kanri1 !== undefined || userScore.kanri2 !== undefined) {
-      const kanriDeviations = [];
-      if (userScore.kanri1 !== undefined) kanriDeviations.push(calculatedResults.kanri1.deviation);
-      if (userScore.kanri2 !== undefined) kanriDeviations.push(calculatedResults.kanri2.deviation);
-      subjectResults.kanri = kanriDeviations.reduce((a, b) => a + b, 0) / kanriDeviations.length;
-    }
-
-    if (userScore.sozei2 !== undefined) {
-      subjectResults.sozei = calculatedResults.sozei2.deviation;
-    }
-
-    if (userScore.keiei1 !== undefined || userScore.keiei2 !== undefined) {
-      const keieiDeviations = [];
-      if (userScore.keiei1 !== undefined) keieiDeviations.push(calculatedResults.keiei1.deviation);
-      if (userScore.keiei2 !== undefined) keieiDeviations.push(calculatedResults.keiei2.deviation);
-      subjectResults.keiei = keieiDeviations.reduce((a, b) => a + b, 0) / keieiDeviations.length;
-    }
-
-    // 総合偏差値を計算
-    let totalDeviation = 0;
-    let subjectCount = 0;
-    
-    if (subjectResults.zaimu !== undefined && !isNaN(subjectResults.zaimu)) {
-      totalDeviation += subjectResults.zaimu * 2;
-      subjectCount += 2;
-    }
-    if (subjectResults.kanri !== undefined && !isNaN(subjectResults.kanri)) {
-      totalDeviation += subjectResults.kanri;
-      subjectCount += 1;
-    }
-    if (subjectResults.sozei !== undefined && !isNaN(subjectResults.sozei)) {
-      totalDeviation += subjectResults.sozei;
-      subjectCount += 1;
-    }
-    if (subjectResults.keiei !== undefined && !isNaN(subjectResults.keiei)) {
-      totalDeviation += subjectResults.keiei;
-      subjectCount += 1;
-    }
-
-    const overallDeviation = subjectCount > 0 ? totalDeviation / subjectCount : 50;
-
-    setResults({
-      questionResults: calculatedResults,
-      subjectResults,
-      overallDeviation,
-      inputtedSubjects: Array.from(inputtedSubjects)
-    });
-
-    setHasCalculated(true);
-  };
-
   const calculateResultsWithData = async (inputScores: Record<string, string>) => {
     const userScore: Record<string, number> = {};
     const inputtedSubjects = new Set<string>();
@@ -528,19 +378,6 @@ export default function Home() {
     });
 
     setHasCalculated(true);
-  };
-
-  // データモード切り替えでの再計算
-  const handleDataModeChange = async (mode: string) => {
-    setDataMode(mode);
-    if (results && Object.keys(userScores).length > 0) {
-      if (mode === 'actual') {
-        await calculateResults();
-      } else {
-        const multiplier = parseFloat(mode.replace('x', ''));
-        await calculateResultsWithExpectedData(userScores, multiplier);
-      }
-    }
   };
 
   const calculateResults = async () => {
@@ -952,91 +789,6 @@ export default function Home() {
               <h2 className="text-2xl font-bold text-blue-600 border-b-2 border-blue-600 pb-3 mb-6">
                 あなたの偏差値
               </h2>
-
-              {/* データモード切り替えタブ */}
-              <div className="mb-6">
-                <div className="flex flex-wrap justify-center gap-1 bg-gray-100 p-2 rounded-lg">
-                  <button
-                    onClick={() => handleDataModeChange('actual')}
-                    className={`px-3 py-2 rounded-md font-medium text-xs sm:text-sm transition-all ${
-                      dataMode === 'actual'
-                        ? 'bg-blue-600 text-white shadow-md'
-                        : 'text-gray-600 hover:text-gray-800'
-                    }`}
-                  >
-                    入力者平均1倍
-                  </button>
-                  <button
-                    onClick={() => handleDataModeChange('1.2x')}
-                    className={`px-3 py-2 rounded-md font-medium text-xs sm:text-sm transition-all ${
-                      dataMode === '1.2x'
-                        ? 'bg-green-600 text-white shadow-md'
-                        : 'text-gray-600 hover:text-gray-800'
-                    }`}
-                  >
-                    入力者平均1/1.2倍
-                  </button>
-                  <button
-                    onClick={() => handleDataModeChange('1.3x')}
-                    className={`px-3 py-2 rounded-md font-medium text-xs sm:text-sm transition-all ${
-                      dataMode === '1.3x'
-                        ? 'bg-yellow-600 text-white shadow-md'
-                        : 'text-gray-600 hover:text-gray-800'
-                    }`}
-                  >
-                    入力者平均1/1.3倍
-                  </button>
-                  <button
-                    onClick={() => handleDataModeChange('1.4x')}
-                    className={`px-3 py-2 rounded-md font-medium text-xs sm:text-sm transition-all ${
-                      dataMode === '1.4x'
-                        ? 'bg-orange-600 text-white shadow-md'
-                        : 'text-gray-600 hover:text-gray-800'
-                    }`}
-                  >
-                    入力者平均1/1.4倍
-                  </button>
-                  <button
-                    onClick={() => handleDataModeChange('1.5x')}
-                    className={`px-3 py-2 rounded-md font-medium text-xs sm:text-sm transition-all ${
-                      dataMode === '1.5x'
-                        ? 'bg-purple-600 text-white shadow-md'
-                        : 'text-gray-600 hover:text-gray-800'
-                    }`}
-                  >
-                    入力者平均1/1.5倍
-                  </button>
-                </div>
-              </div>
-
-              {/* データモードの説明 */}
-              <div className="mb-6 p-3 rounded-lg text-sm text-center">
-                {dataMode === 'actual' && (
-                  <div className="bg-blue-50 text-blue-800 border border-blue-200">
-                    現在入力されている実データに基づく偏差値です
-                  </div>
-                )}
-                {dataMode === '1.2x' && (
-                  <div className="bg-green-50 text-green-800 border border-green-200">
-                    入力者平均の83%水準（1/1.2倍）に基づく偏差値です
-                  </div>
-                )}
-                {dataMode === '1.3x' && (
-                  <div className="bg-yellow-50 text-yellow-800 border border-yellow-200">
-                    入力者平均の77%水準（1/1.3倍）に基づく偏差値です
-                  </div>
-                )}
-                {dataMode === '1.4x' && (
-                  <div className="bg-orange-50 text-orange-800 border border-orange-200">
-                    入力者平均の71%水準（1/1.4倍）に基づく偏差値です
-                  </div>
-                )}
-                {dataMode === '1.5x' && (
-                  <div className="bg-purple-50 text-purple-800 border border-purple-200">
-                    入力者平均の67%水準（1/1.5倍）に基づく偏差値です
-                  </div>
-                )}
-              </div>
 
               {/* 分析結果表示後のコード表示（結果のすぐ下に配置） */}
               <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-4 mb-6">
