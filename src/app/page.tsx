@@ -76,26 +76,73 @@ export default function Home() {
   // データベースにスコアを保存
   const saveScoreToDatabase = async (code: string, scoreData: any) => {
     try {
-      console.log('Saving to database:', { code, scoreData }); // デバッグログ追加
-      const { error } = await supabase
+      console.log('Saving to database:', { code, scoreData });
+      
+      // データ検証
+      if (!code || typeof code !== 'string' || !/^[A-Z0-9]{8}$/.test(code)) {
+        throw new Error(`Invalid user code: ${code}`);
+      }
+      
+      // まず既存レコードの存在確認
+      const { data: existingData } = await supabase
         .from('user_scores')
-        .upsert({
-          user_code: code,
-          scores: scoreData,
-          updated_at: new Date().toISOString()
-        });
+        .select('user_code')
+        .eq('user_code', code)
+        .single();
+      
+      let result;
+      if (existingData) {
+        // 既存レコードを更新
+        console.log('Updating existing record for code:', code);
+        result = await supabase
+          .from('user_scores')
+          .update({
+            scores: scoreData,
+            updated_at: new Date().toISOString()
+          })
+          .eq('user_code', code)
+          .select();
+      } else {
+        // 新規レコードを挿入
+        console.log('Inserting new record for code:', code);
+        result = await supabase
+          .from('user_scores')
+          .insert({
+            user_code: code,
+            scores: scoreData,
+            updated_at: new Date().toISOString()
+          })
+          .select();
+      }
+      
+      const { data, error } = result;
       
       if (error) {
-        console.error('Supabase error:', error);
+        console.error('Supabase error details:', {
+          message: error.message,
+          details: error.details,
+          hint: error.hint,
+          code: error.code
+        });
         throw error;
       }
       
-      console.log('Successfully saved to database'); // 成功ログ追加
+      console.log('Successfully saved to database:', data);
       // 保存後、全データを再読み込み
       await loadAllScores();
-    } catch (error) {
+    } catch (error: any) {
       console.error('Error saving score:', error);
-      alert('データの保存に失敗しました。再度お試しください。');
+      
+      // エラーの詳細をユーザーに表示（デバッグ目的）
+      let errorMessage = 'データの保存に失敗しました。';
+      if (error.message) {
+        errorMessage += `\n詳細: ${error.message}`;
+      }
+      if (error.code) {
+        errorMessage += `\nエラーコード: ${error.code}`;
+      }
+      
+      alert(errorMessage + '\n\n開発者ツールのConsoleで詳細を確認してください。');
     }
   };
 
