@@ -40,11 +40,7 @@ export default function Home() {
         await calculateResultsWithExpectedData(userScores, multiplier);
       }
     }
-  }; ? getBaseAverage('keiei2', 6.0) : getBaseAverage('keiei2', 6.0) / multiplier,
-        stdDev: multiplier === 1 ? 3.5 : 3.0 + (multiplier - 1) * 0.4
-      }
-    };
-  };
+
 
   // localStorageからuserCodeを復元
   useEffect(() => {
