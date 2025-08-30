@@ -790,10 +790,6 @@ const handleStatsDataModeChange = (mode: string) => {
   });
 };
 
-// 統計用データモード切り替えハンドラを追加
-const handleStatsDataModeChange = (mode: string) => {
-  setStatsDataMode(mode);
-};
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-600 via-purple-600 to-purple-800">
