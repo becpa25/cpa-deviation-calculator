@@ -598,17 +598,6 @@ export default function Home() {
     };
 
     // データモード切り替えでの再計算
-    const handleDataModeChange = async (mode: string) => {
-      setDataMode(mode);
-      if (results && Object.keys(userScores).length > 0) {
-        if (mode === 'actual') {
-          await calculateResults();
-        } else {
-          const multiplier = parseFloat(mode.replace('x', ''));
-          await calculateResultsWithExpectedData(userScores, multiplier);
-        }
-      }
-    };
 
     const calculateResults = async () => {
       const userScore: Record<string, number> = {};
