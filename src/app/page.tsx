@@ -3,7 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
-import { entropyWeightsMean, entropyWeightsMeanVar, weightedStats } from '../utils/stats';
+import { entropyWeightsMean, entropyWeightsMeanVar, weightedStats } from './utils/stats';
 
 export default function Home() {
   // サンプルデータを削除
