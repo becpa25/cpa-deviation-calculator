@@ -3,6 +3,7 @@
 
 import { useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
+import { entropyWeightsMean, entropyWeightsMeanVar, weightedStats } from '../utils/stats';
 
 export default function Home() {
   // サンプルデータを削除
@@ -23,9 +24,27 @@ export default function Home() {
   const [userScores, setUserScores] = useState<Record<string, string>>({});
   const [results, setResults] = useState<any>(null);
   const [currentMode, setCurrentMode] = useState<'input' | 'stats'>('input');
+  const [dataMode, setDataMode] = useState<string>('actual'); // 実データ基準をデフォルトに
   const [userCode, setUserCode] = useState<string>('');
   const [showCodeInput, setShowCodeInput] = useState<boolean>(false);
   const [hasCalculated, setHasCalculated] = useState<boolean>(false);
+
+  // データモード切り替えでの再計算
+  const handleDataModeChange = async (mode: string) => {
+    setDataMode(mode);
+    if (results && Object.keys(userScores).length > 0) {
+      if (mode === 'actual') {
+        await calculateResults();
+      } else {
+        const multiplier = parseFloat(mode.replace('x', ''));
+        await calculateResultsWithExpectedData(userScores, multiplier);
+      }
+    }
+  }; ? getBaseAverage('keiei2', 6.0) : getBaseAverage('keiei2', 6.0) / multiplier,
+        stdDev: multiplier === 1 ? 3.5 : 3.0 + (multiplier - 1) * 0.4
+      }
+    };
+  };
 
   // localStorageからuserCodeを復元
   useEffect(() => {
@@ -267,6 +286,207 @@ export default function Home() {
     return average + stdDev * 0.2;
   };
 
+  const calculateResultsWithExpectedData = async (inputScores: Record<string, string>, multiplier: number = 1.5) => {
+    const userScore: Record<string, number> = {};
+    const inputtedSubjects = new Set<string>();
+
+    // 入力データを取得
+    Object.keys(questionConfig).forEach(key => {
+      const value = parseFloat(inputScores[key] || '');
+      if (!isNaN(value)) {
+        userScore[key] = value;
+        const config = questionConfig[key as keyof typeof questionConfig];
+        inputtedSubjects.add(config.subject);
+      }
+    });
+
+    if (Object.keys(userScore).length === 0) {
+      alert('少なくとも1つの科目の点数を入力してください。');
+      return;
+    }
+
+    // 自分以外のallScoresを使用（リーク防止）
+    const filteredAllScores = filterDuplicateData(allScores, userScore);
+    
+    const calculatedResults: any = {};
+    const subjectResults: any = {};
+    const assumptions = {
+      k: multiplier,
+      mu0: {} as Record<string, number>,
+      sigma0: {} as Record<string, number>,
+      weighting: 'mean-var' as 'mean-var' | 'mean-only',
+      diagnostics: {} as Record<string, { maxWOverMinW: number, shrunk: boolean, note?: string }>
+    };
+
+    // 各大問の偏差値をエントロピー重み付けで計算
+    Object.keys(userScore).forEach(key => {
+      const config = questionConfig[key as keyof typeof questionConfig];
+      
+      // 異常値フィルタリング（既存ロジック踏襲）
+      const filterAbnormalScores = (scores: any[], key: string) => {
+        const config = questionConfig[key as keyof typeof questionConfig];
+        return scores.filter(s => {
+          const score = s[key];
+          if (score === undefined || score === null || score === '') return true;
+          const numScore = parseFloat(score);
+          return !(numScore === 0 || numScore === config.maxScore);
+        });
+      };
+      
+      const filteredData = filterAbnormalScores(filteredAllScores, key);
+      const rawScores = filteredData
+        .map(s => parseFloat(s[key]))
+        .filter(s => !isNaN(s));
+        
+      if (rawScores.length === 0) {
+        // データなしの場合はフォールバック
+        calculatedResults[key] = {
+          config,
+          userScore: userScore[key],
+          average: 0,
+          deviation: 50,
+          score52Level: 0
+        };
+        assumptions.diagnostics[key] = { maxWOverMinW: 1, shrunk: false, note: 'No data available' };
+        return;
+      }
+
+      // 生統計の算出
+      const muHat = rawScores.reduce((sum, x) => sum + x, 0) / rawScores.length;
+      const varianceHat = rawScores.reduce((sum, x) => sum + Math.pow(x - muHat, 2), 0) / rawScores.length;
+      const sdHat = Math.sqrt(Math.max(varianceHat, 0.25)); // 最小SD設定
+
+      // 目標統計の算出
+      let mu0 = muHat / multiplier;
+      let sigma0 = sdHat / multiplier; // 比例仮定
+      
+      // 実現可能性チェック
+      const minScore = Math.min(...rawScores);
+      const maxScore = Math.max(...rawScores);
+      let shrunk = false;
+      
+      if (mu0 < minScore - 2 * sdHat || mu0 > maxScore + 2 * sdHat) {
+        const alpha = 0.8;
+        mu0 = alpha * mu0 + (1 - alpha) * muHat;
+        sigma0 = alpha * sigma0 + (1 - alpha) * sdHat;
+        shrunk = true;
+      }
+      
+      // エントロピー重み付け実行
+      let weights: number[] | null = null;
+      let weightingType: 'mean-var' | 'mean-only' = 'mean-var';
+      
+      // まず平均・分散一致を試行
+      weights = entropyWeightsMeanVar(rawScores, mu0, sigma0);
+      
+      if (!weights) {
+        // 失敗時は平均一致のみにフォールバック
+        weights = entropyWeightsMean(rawScores, mu0);
+        weightingType = 'mean-only';
+      }
+      
+      // 重み比率チェックと最終調整
+      const minWeight = Math.min(...weights);
+      const maxWeight = Math.max(...weights);
+      const maxWOverMinW = maxWeight / minWeight;
+      
+      if (maxWOverMinW > 1e6) {
+        // さらに縮小して再試行
+        const alpha = 0.8;
+        mu0 = alpha * mu0 + (1 - alpha) * muHat;
+        weights = entropyWeightsMean(rawScores, mu0);
+        shrunk = true;
+      }
+      
+      // 最終重み付き統計の計算
+      const weightedStatsResult = weightedStats(rawScores, weights);
+      const finalMu0 = weightedStatsResult.mean;
+      const finalSigma0 = Math.max(weightedStatsResult.sd, 0.5);
+      
+      // 偏差値計算（補正ビューでは(mu0, sigma0)を使用）
+      const userDeviation = 50 + 10 * (userScore[key] - finalMu0) / finalSigma0;
+      const score52Level = finalMu0 + 0.2 * finalSigma0;
+
+      calculatedResults[key] = {
+        config,
+        userScore: userScore[key],
+        average: finalMu0,
+        deviation: Math.max(0, Math.min(100, userDeviation)), // 0-100に制限
+        score52Level
+      };
+      
+      // 診断情報の記録
+      assumptions.mu0[key] = finalMu0;
+      assumptions.sigma0[key] = finalSigma0;
+      assumptions.weighting = weightingType;
+      assumptions.diagnostics[key] = {
+        maxWOverMinW,
+        shrunk,
+        note: weightingType === 'mean-only' ? 'Fell back to mean-only weighting' : undefined
+      };
+    });
+
+    // 科目ごとの偏差値を計算（既存ロジック踏襲）
+    if (userScore.zaimu3 !== undefined || userScore.zaimu4 !== undefined || userScore.zaimu5 !== undefined) {
+      const zaimuDeviations = [];
+      if (userScore.zaimu3 !== undefined) zaimuDeviations.push(calculatedResults.zaimu3.deviation * 0.6);
+      if (userScore.zaimu4 !== undefined) zaimuDeviations.push(calculatedResults.zaimu4.deviation * 0.7);
+      if (userScore.zaimu5 !== undefined) zaimuDeviations.push(calculatedResults.zaimu5.deviation * 0.7);
+      subjectResults.zaimu = zaimuDeviations.reduce((a, b) => a + b, 0) / 2;
+    }
+
+    if (userScore.kanri1 !== undefined || userScore.kanri2 !== undefined) {
+      const kanriDeviations = [];
+      if (userScore.kanri1 !== undefined) kanriDeviations.push(calculatedResults.kanri1.deviation);
+      if (userScore.kanri2 !== undefined) kanriDeviations.push(calculatedResults.kanri2.deviation);
+      subjectResults.kanri = kanriDeviations.reduce((a, b) => a + b, 0) / kanriDeviations.length;
+    }
+
+    if (userScore.sozei2 !== undefined) {
+      subjectResults.sozei = calculatedResults.sozei2.deviation;
+    }
+
+    if (userScore.keiei1 !== undefined || userScore.keiei2 !== undefined) {
+      const keieiDeviations = [];
+      if (userScore.keiei1 !== undefined) keieiDeviations.push(calculatedResults.keiei1.deviation);
+      if (userScore.keiei2 !== undefined) keieiDeviations.push(calculatedResults.keiei2.deviation);
+      subjectResults.keiei = keieiDeviations.reduce((a, b) => a + b, 0) / keieiDeviations.length;
+    }
+
+    // 総合偏差値を計算
+    let totalDeviation = 0;
+    let subjectCount = 0;
+    
+    if (subjectResults.zaimu !== undefined && !isNaN(subjectResults.zaimu)) {
+      totalDeviation += subjectResults.zaimu * 2;
+      subjectCount += 2;
+    }
+    if (subjectResults.kanri !== undefined && !isNaN(subjectResults.kanri)) {
+      totalDeviation += subjectResults.kanri;
+      subjectCount += 1;
+    }
+    if (subjectResults.sozei !== undefined && !isNaN(subjectResults.sozei)) {
+      totalDeviation += subjectResults.sozei;
+      subjectCount += 1;
+    }
+    if (subjectResults.keiei !== undefined && !isNaN(subjectResults.keiei)) {
+      totalDeviation += subjectResults.keiei;
+      subjectCount += 1;
+    }
+
+    const overallDeviation = subjectCount > 0 ? totalDeviation / subjectCount : 50;
+
+    setResults({
+      questionResults: calculatedResults,
+      subjectResults,
+      overallDeviation,
+      inputtedSubjects: Array.from(inputtedSubjects),
+      assumptions // 診断情報を追加
+    });
+
+    setHasCalculated(true);
+  };
+
   const calculateResultsWithData = async (inputScores: Record<string, string>) => {
     const userScore: Record<string, number> = {};
     const inputtedSubjects = new Set<string>();
@@ -378,6 +598,19 @@ export default function Home() {
     });
 
     setHasCalculated(true);
+  };
+
+  // データモード切り替えでの再計算
+  const handleDataModeChange = async (mode: string) => {
+    setDataMode(mode);
+    if (results && Object.keys(userScores).length > 0) {
+      if (mode === 'actual') {
+        await calculateResults();
+      } else {
+        const multiplier = parseFloat(mode.replace('x', ''));
+        await calculateResultsWithExpectedData(userScores, multiplier);
+      }
+    }
   };
 
   const calculateResults = async () => {
@@ -789,6 +1022,91 @@ export default function Home() {
               <h2 className="text-2xl font-bold text-blue-600 border-b-2 border-blue-600 pb-3 mb-6">
                 あなたの偏差値
               </h2>
+
+              {/* データモード切り替えタブ */}
+              <div className="mb-6">
+                <div className="flex flex-wrap justify-center gap-1 bg-gray-100 p-2 rounded-lg">
+                  <button
+                    onClick={() => handleDataModeChange('actual')}
+                    className={`px-3 py-2 rounded-md font-medium text-xs sm:text-sm transition-all ${
+                      dataMode === 'actual'
+                        ? 'bg-blue-600 text-white shadow-md'
+                        : 'text-gray-600 hover:text-gray-800'
+                    }`}
+                  >
+                    入力者平均1倍
+                  </button>
+                  <button
+                    onClick={() => handleDataModeChange('1.2x')}
+                    className={`px-3 py-2 rounded-md font-medium text-xs sm:text-sm transition-all ${
+                      dataMode === '1.2x'
+                        ? 'bg-green-600 text-white shadow-md'
+                        : 'text-gray-600 hover:text-gray-800'
+                    }`}
+                  >
+                    入力者平均1/1.2倍
+                  </button>
+                  <button
+                    onClick={() => handleDataModeChange('1.3x')}
+                    className={`px-3 py-2 rounded-md font-medium text-xs sm:text-sm transition-all ${
+                      dataMode === '1.3x'
+                        ? 'bg-yellow-600 text-white shadow-md'
+                        : 'text-gray-600 hover:text-gray-800'
+                    }`}
+                  >
+                    入力者平均1/1.3倍
+                  </button>
+                  <button
+                    onClick={() => handleDataModeChange('1.4x')}
+                    className={`px-3 py-2 rounded-md font-medium text-xs sm:text-sm transition-all ${
+                      dataMode === '1.4x'
+                        ? 'bg-orange-600 text-white shadow-md'
+                        : 'text-gray-600 hover:text-gray-800'
+                    }`}
+                  >
+                    入力者平均1/1.4倍
+                  </button>
+                  <button
+                    onClick={() => handleDataModeChange('1.5x')}
+                    className={`px-3 py-2 rounded-md font-medium text-xs sm:text-sm transition-all ${
+                      dataMode === '1.5x'
+                        ? 'bg-purple-600 text-white shadow-md'
+                        : 'text-gray-600 hover:text-gray-800'
+                    }`}
+                  >
+                    入力者平均1/1.5倍
+                  </button>
+                </div>
+              </div>
+
+              {/* データモードの説明 */}
+              <div className="mb-6 p-3 rounded-lg text-sm text-center">
+                {dataMode === 'actual' && (
+                  <div className="bg-blue-50 text-blue-800 border border-blue-200">
+                    現在入力されている実データに基づく偏差値です
+                  </div>
+                )}
+                {dataMode === '1.2x' && (
+                  <div className="bg-green-50 text-green-800 border border-green-200">
+                    入力者平均の83%水準（1/1.2倍）に基づく偏差値です
+                  </div>
+                )}
+                {dataMode === '1.3x' && (
+                  <div className="bg-yellow-50 text-yellow-800 border border-yellow-200">
+                    入力者平均の77%水準（1/1.3倍）に基づく偏差値です
+                  </div>
+                )}
+                {dataMode === '1.4x' && (
+                  <div className="bg-orange-50 text-orange-800 border border-orange-200">
+                    入力者平均の71%水準（1/1.4倍）に基づく偏差値です
+                  </div>
+                )}
+                {dataMode === '1.5x' && (
+                  <div className="bg-purple-50 text-purple-800 border border-purple-200">
+                    入力者平均の67%水準（1/1.5倍）に基づく偏差値です
+                  </div>
+                )}
+              </div>
 
               {/* 分析結果表示後のコード表示（結果のすぐ下に配置） */}
               <div className="bg-yellow-50 border-2 border-yellow-300 rounded-lg p-4 mb-6">
